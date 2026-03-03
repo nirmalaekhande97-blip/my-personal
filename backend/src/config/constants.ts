@@ -1,0 +1,4 @@
+export const APP_CONSTANTS = {
+  DEFAULT_PAGE_SIZE: 10,
+  TOKEN_EXPIRY: "1h",
+};

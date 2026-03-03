@@ -1,0 +1,95 @@
+services:
+
+  # -------------------------------
+  # ThingsBoard PostgreSQL Database
+  # -------------------------------
+  tb-postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: thingsboard
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - tb-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------
+  # ThingsBoard Platform
+  # -------------------------------
+  thingsboard:
+    image: thingsboard/tb-node:4.3.0.1
+    restart: always
+    depends_on:
+      tb-postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "7070:7070"
+      - "1883:1883"
+      - "8883:8883"
+      - "5683-5688:5683-5688/udp"
+    environment:
+      TB_SERVICE_ID: tb-ce-node
+      SPRING_DATASOURCE_URL: jdbc:postgresql://tb-postgres:5432/thingsboard
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  # -------------------------------
+  # Redis Cache
+  # -------------------------------
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # -------------------------------
+  # Backend API (NodeJS)
+  # -------------------------------
+  backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend/Dockerfile
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - thingsboard
+
+  # -------------------------------
+  # Background Worker Service
+  # -------------------------------
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend/Dockerfile
+    command: npm run worker
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - thingsboard
+
+  # -------------------------------
+  # Frontend React App
+  # -------------------------------
+  frontend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/frontend/Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  tb-postgres-data:
